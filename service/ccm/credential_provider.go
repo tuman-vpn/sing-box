@@ -409,6 +409,33 @@ func ccmPlanWeight(accountType string, rateLimitTier string) float64 {
 	}
 }
 
+func ccmTierLabel(accountType string, rateLimitTier string) string {
+	switch accountType {
+	case "max":
+		switch rateLimitTier {
+		case "default_claude_max_20x":
+			return "Max 20x"
+		case "default_claude_max_5x":
+			return "Max 5x"
+		default:
+			return "Max 5x"
+		}
+	case "team":
+		if rateLimitTier == "default_claude_max_5x" {
+			return "Team 5x"
+		}
+		return "Team"
+	case "enterprise":
+		return "Ent"
+	case "pro":
+		return "Pro"
+	case "":
+		return "?"
+	default:
+		return "Pro"
+	}
+}
+
 func allCredentialsUnavailableError(credentials []Credential) error {
 	var hasUnavailable bool
 	var earliest time.Time

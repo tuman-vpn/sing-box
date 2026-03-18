@@ -322,6 +322,11 @@ func (c *externalCredential) planWeight() float64 {
 	return 10
 }
 
+func (c *externalCredential) tierLabel() string {
+	weight := c.planWeight()
+	return "Ext *" + strconv.FormatFloat(weight, 'f', -1, 64)
+}
+
 func (c *externalCredential) fiveHourResetTime() time.Time {
 	c.stateAccess.RLock()
 	defer c.stateAccess.RUnlock()

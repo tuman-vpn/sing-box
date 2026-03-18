@@ -105,6 +105,7 @@ type Credential interface {
 	fiveHourCap() float64
 	weeklyCap() float64
 	planWeight() float64
+	tierLabel() string
 	fiveHourResetTime() time.Time
 	weeklyResetTime() time.Time
 	markRateLimited(resetAt time.Time)

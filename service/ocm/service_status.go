@@ -3,11 +3,16 @@ package ocm
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"math"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
+	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 )
 
@@ -98,20 +103,30 @@ func (s *Service) handleStatusEndpoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	textFormat := r.URL.Query().Get("format") == "text"
+
 	if r.URL.Query().Get("watch") == "true" {
-		s.handleStatusStream(w, r, provider, userConfig)
+		s.handleStatusStream(w, r, provider, userConfig, textFormat)
 		return
 	}
 
 	provider.pollIfStale()
 	status := s.computeAggregatedUtilization(provider, userConfig)
 
+	if textFormat {
+		credentials := s.visibleCredentials(provider, userConfig)
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write(formatStatusText(status, credentials, "OCM"))
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(status.toPayload())
 }
 
-func (s *Service) handleStatusStream(w http.ResponseWriter, r *http.Request, provider credentialProvider, userConfig *option.OCMUser) {
+func (s *Service) handleStatusStream(w http.ResponseWriter, r *http.Request, provider credentialProvider, userConfig *option.OCMUser, textFormat bool) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeJSONError(w, r, http.StatusInternalServerError, "api_error", "streaming not supported")
@@ -127,12 +142,21 @@ func (s *Service) handleStatusStream(w http.ResponseWriter, r *http.Request, pro
 
 	provider.pollIfStale()
 
-	w.Header().Set("Content-Type", "application/json")
+	if textFormat {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+	}
 	w.WriteHeader(http.StatusOK)
 
 	last := s.computeAggregatedUtilization(provider, userConfig)
 	buf := &bytes.Buffer{}
-	json.NewEncoder(buf).Encode(last.toPayload())
+	if textFormat {
+		fmt.Fprintf(buf, "────── %s ──────\n\n", time.Now().Format("15:04:05"))
+		buf.Write(formatStatusText(last, s.visibleCredentials(provider, userConfig), "OCM"))
+	} else {
+		json.NewEncoder(buf).Encode(last.toPayload())
+	}
 	_, writeErr := w.Write(buf.Bytes())
 	if writeErr != nil {
 		return
@@ -160,7 +184,12 @@ func (s *Service) handleStatusStream(w http.ResponseWriter, r *http.Request, pro
 			}
 			last = current
 			buf.Reset()
-			json.NewEncoder(buf).Encode(current.toPayload())
+			if textFormat {
+				fmt.Fprintf(buf, "\n────── %s ──────\n\n", time.Now().Format("15:04:05"))
+				buf.Write(formatStatusText(current, s.visibleCredentials(provider, userConfig), "OCM"))
+			} else {
+				json.NewEncoder(buf).Encode(current.toPayload())
+			}
 			_, writeErr = w.Write(buf.Bytes())
 			if writeErr != nil {
 				return
@@ -275,5 +304,182 @@ func (s *Service) rewriteResponseHeaders(headers http.Header, provider credentia
 				break
 			}
 		}
+	}
+}
+
+type tierGroup struct {
+	label       string
+	weight      float64
+	available   int
+	unavailable int
+}
+
+func (s *Service) visibleCredentials(provider credentialProvider, userConfig *option.OCMUser) []Credential {
+	var result []Credential
+	for _, credential := range provider.allCredentials() {
+		if userConfig != nil && userConfig.ExternalCredential != "" && credential.tagName() == userConfig.ExternalCredential {
+			continue
+		}
+		if userConfig != nil && !userConfig.AllowExternalUsage && credential.isExternal() {
+			continue
+		}
+		result = append(result, credential)
+	}
+	return result
+}
+
+func groupCredentials(credentials []Credential) []tierGroup {
+	type key struct {
+		label  string
+		weight float64
+	}
+	counts := make(map[key]*tierGroup)
+	var order []key
+	for _, credential := range credentials {
+		label := credential.tierLabel()
+		weight := credential.planWeight()
+		k := key{label, weight}
+		group, exists := counts[k]
+		if !exists {
+			group = &tierGroup{label: label, weight: weight}
+			counts[k] = group
+			order = append(order, k)
+		}
+		if credential.isAvailable() {
+			group.available++
+		} else {
+			group.unavailable++
+		}
+	}
+	groups := make([]tierGroup, 0, len(order))
+	for _, k := range order {
+		groups = append(groups, *counts[k])
+	}
+	sort.SliceStable(groups, func(i, j int) bool {
+		return groups[i].weight > groups[j].weight
+	})
+	return groups
+}
+
+func formatBar(ratio float64, width int) string {
+	filled := int(math.Round(ratio * float64(width)))
+	if filled < 0 {
+		filled = 0
+	}
+	if filled > width {
+		filled = width
+	}
+	return strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
+}
+
+func centerLabel(label string, width int) string {
+	runeCount := utf8.RuneCountInString(label)
+	if runeCount >= width {
+		runes := []rune(label)
+		return string(runes[:width])
+	}
+	pad := width - runeCount
+	left := pad / 2
+	right := pad - left
+	return strings.Repeat(" ", left) + label + strings.Repeat(" ", right)
+}
+
+func formatStatusText(status aggregatedStatus, credentials []Credential, serviceName string) []byte {
+	groups := groupCredentials(credentials)
+	buf := &bytes.Buffer{}
+
+	var summaryParts []string
+	for _, group := range groups {
+		total := group.available + group.unavailable
+		if total > 1 {
+			summaryParts = append(summaryParts, fmt.Sprintf("%d× %s", total, group.label))
+		} else {
+			summaryParts = append(summaryParts, group.label)
+		}
+	}
+	weightStr := strconv.FormatFloat(status.totalWeight, 'f', -1, 64)
+	fmt.Fprintf(buf, "%s (%s, wt %s):\n\n", serviceName, strings.Join(summaryParts, ", "), weightStr)
+
+	barWidth := 20
+	fiveHourBar := formatBar(status.fiveHourUtilization/100, barWidth)
+	fmt.Fprintf(buf, "5h  %s  %5.2f%%", fiveHourBar, status.fiveHourUtilization)
+	if !status.fiveHourReset.IsZero() {
+		remaining := time.Until(status.fiveHourReset)
+		if remaining > 0 {
+			fmt.Fprintf(buf, "  resets in %s", log.FormatDuration(remaining))
+		}
+	}
+	buf.WriteByte('\n')
+
+	weeklyBar := formatBar(status.weeklyUtilization/100, barWidth)
+	fmt.Fprintf(buf, "7d  %s  %5.2f%%", weeklyBar, status.weeklyUtilization)
+	if !status.weeklyReset.IsZero() {
+		remaining := time.Until(status.weeklyReset)
+		if remaining > 0 {
+			fmt.Fprintf(buf, "  resets in %s", log.FormatDuration(remaining))
+		}
+	}
+	buf.WriteByte('\n')
+
+	var cards []string
+	for _, group := range groups {
+		if group.available > 0 {
+			label := group.label
+			if group.available > 1 {
+				label += " * " + strconv.Itoa(group.available)
+			}
+			cards = append(cards, centerLabel(label, 12))
+		}
+		if group.unavailable > 0 {
+			label := group.label + " ×"
+			if group.unavailable > 1 {
+				label += strconv.Itoa(group.unavailable)
+			}
+			cards = append(cards, centerLabel(label, 12))
+		}
+	}
+
+	if len(cards) > 0 {
+		buf.WriteByte('\n')
+		writeCardRows(buf, cards)
+	}
+
+	return buf.Bytes()
+}
+
+func writeCardRows(buf *bytes.Buffer, cards []string) {
+	const cardsPerRow = 5
+	for i := 0; i < len(cards); i += cardsPerRow {
+		end := i + cardsPerRow
+		if end > len(cards) {
+			end = len(cards)
+		}
+		row := cards[i:end]
+
+		for j := range row {
+			if j > 0 {
+				buf.WriteByte(' ')
+			}
+			buf.WriteString("┌────────────┐")
+		}
+		buf.WriteByte('\n')
+
+		for j, card := range row {
+			if j > 0 {
+				buf.WriteByte(' ')
+			}
+			buf.WriteString("│")
+			buf.WriteString(card)
+			buf.WriteString("│")
+		}
+		buf.WriteByte('\n')
+
+		for j := range row {
+			if j > 0 {
+				buf.WriteByte(' ')
+			}
+			buf.WriteString("└────────────┘")
+		}
+		buf.WriteByte('\n')
 	}
 }

@@ -422,6 +422,12 @@ func (c *defaultCredential) planWeight() float64 {
 	return ccmPlanWeight(c.state.accountType, c.state.rateLimitTier)
 }
 
+func (c *defaultCredential) tierLabel() string {
+	c.stateAccess.RLock()
+	defer c.stateAccess.RUnlock()
+	return ccmTierLabel(c.state.accountType, c.state.rateLimitTier)
+}
+
 func (c *defaultCredential) fiveHourResetTime() time.Time {
 	c.stateAccess.RLock()
 	defer c.stateAccess.RUnlock()

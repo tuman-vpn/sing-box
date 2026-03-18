@@ -415,6 +415,19 @@ func (p *balancerProvider) allCredentials() []Credential {
 
 func (p *balancerProvider) close() {}
 
+func ocmTierLabel(accountType string) string {
+	switch accountType {
+	case "pro":
+		return "Pro"
+	case "plus":
+		return "Plus"
+	case "":
+		return "?"
+	default:
+		return "Plus"
+	}
+}
+
 func allRateLimitedError(credentials []Credential) error {
 	var hasUnavailable bool
 	var earliest time.Time

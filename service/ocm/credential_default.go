@@ -471,6 +471,12 @@ func (c *defaultCredential) planWeight() float64 {
 	return ocmPlanWeight(c.state.accountType)
 }
 
+func (c *defaultCredential) tierLabel() string {
+	c.stateAccess.RLock()
+	defer c.stateAccess.RUnlock()
+	return ocmTierLabel(c.state.accountType)
+}
+
 func (c *defaultCredential) weeklyResetTime() time.Time {
 	c.stateAccess.RLock()
 	defer c.stateAccess.RUnlock()
