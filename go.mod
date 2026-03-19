@@ -1,6 +1,10 @@
 module github.com/sagernet/sing-box
 
+<<<<<<< HEAD
 go 1.24.7
+=======
+go 1.25.5
+>>>>>>> 7e93593f (feat: add dnsproxy gomobile bindings)
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.26.0
@@ -20,9 +24,14 @@ require (
 	github.com/libdns/cloudflare v0.2.2
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/metacubex/utls v1.8.4
+<<<<<<< HEAD
 	github.com/mholt/acmez/v3 v3.1.6
 	github.com/miekg/dns v1.1.72
 	github.com/openai/openai-go/v3 v3.26.0
+=======
+	github.com/mholt/acmez/v3 v3.1.2
+	github.com/miekg/dns v1.1.68
+>>>>>>> 7e93593f (feat: add dnsproxy gomobile bindings)
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/sagernet/asc-go v0.0.0-20241217030726-d563060fe4e1
 	github.com/sagernet/bbolt v0.0.0-20231014093535-ea5cb2fe9f0a
@@ -45,11 +54,16 @@ require (
 	github.com/sagernet/tailscale v1.92.4-sing-box-1.13-mod.7
 	github.com/sagernet/wireguard-go v0.0.2-beta.1.0.20260224074747-506b7631853c
 	github.com/sagernet/ws v0.0.0-20231204124109-acfe8907c854
+<<<<<<< HEAD
 	github.com/spf13/cobra v1.10.2
+=======
+	github.com/spf13/cobra v1.9.1
+>>>>>>> 7e93593f (feat: add dnsproxy gomobile bindings)
 	github.com/stretchr/testify v1.11.1
 	github.com/vishvananda/netns v0.0.5
 	go.uber.org/zap v1.27.1
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
+<<<<<<< HEAD
 	golang.org/x/crypto v0.48.0
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93
 	golang.org/x/mod v0.33.0
@@ -61,8 +75,34 @@ require (
 	howett.net/plist v1.0.1
 )
 
+=======
+	golang.org/x/crypto v0.49.0
+	golang.org/x/exp v0.0.0-20251113190631-e25ba8c21ef6
+	golang.org/x/mod v0.33.0
+	golang.org/x/net v0.52.0
+	golang.org/x/sys v0.42.0
+	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
+	google.golang.org/grpc v1.77.0
+	google.golang.org/protobuf v1.36.10
+	howett.net/plist v1.0.1
+)
+
+require (
+	github.com/AdguardTeam/golibs v0.35.2 // indirect
+	github.com/ameshkov/dnscrypt/v2 v2.4.0 // indirect
+	github.com/ameshkov/dnsstamps v1.0.3 // indirect
+	github.com/bluele/gcache v0.0.2 // indirect
+	github.com/quic-go/quic-go v0.56.0 // indirect
+	github.com/robfig/cron/v3 v3.0.1 // indirect
+	gonum.org/v1/gonum v0.16.0 // indirect
+)
+
+//replace github.com/sagernet/sing => ../sing
+
+>>>>>>> 7e93593f (feat: add dnsproxy gomobile bindings)
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/AdguardTeam/dnsproxy v0.75.3
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/akutz/memconn v0.1.0 // indirect
 	github.com/alexbrainman/sspi v0.0.0-20231016080023-1a75b4708caa // indirect
@@ -154,11 +194,18 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap/exp v0.3.0 // indirect
 	go4.org/mem v0.0.0-20240501181205-ae6ca9944745 // indirect
+<<<<<<< HEAD
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/term v0.40.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
+=======
+	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/term v0.41.0 // indirect
+	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/time v0.12.0 // indirect
+>>>>>>> 7e93593f (feat: add dnsproxy gomobile bindings)
 	golang.org/x/tools v0.42.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard/windows v0.5.3 // indirect
@@ -166,3 +213,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.3.0 // indirect
 )
+
+replace github.com/AdguardTeam/dnsproxy => github.com/tuman-vpn/dnsproxy v0.81.0-tuman.1
