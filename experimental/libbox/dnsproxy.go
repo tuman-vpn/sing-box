@@ -8,11 +8,19 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/AdguardTeam/dnsproxy/proxy"
 	"github.com/AdguardTeam/dnsproxy/upstream"
 	"github.com/miekg/dns"
 )
+
+// SocketProtector protects sockets from being routed through the VPN TUN
+// interface.  On Android, this calls VpnService.protect(fd).
+// Gomobile exports this as io.nekohasekai.libbox.SocketProtector.
+type SocketProtector interface {
+	ProtectFd(fd int32) bool
+}
 
 // DnsProxyOptions configures the embedded dnsproxy instance.
 // Gomobile exports this as io.nekohasekai.libbox.DnsProxyOptions.
@@ -26,7 +34,6 @@ type DnsProxyOptions struct {
 	CacheMaxTTL   int
 	IPv6Disabled  bool
 	MaxGoroutines int
-	SocksProxy    string
 }
 
 var (
@@ -35,9 +42,10 @@ var (
 	dnsProxyCancel    context.CancelFunc
 )
 
-// StartDnsProxy creates and starts a dnsproxy instance.
+// StartDnsProxy creates and starts a dnsproxy instance with socket protection.
+// The protector is called on every DNS socket to bypass the VPN TUN interface.
 // Returns the actual listening port.
-func StartDnsProxy(opts *DnsProxyOptions) (int, error) {
+func StartDnsProxy(opts *DnsProxyOptions, protector SocketProtector) (int, error) {
 	dnsProxyMu.Lock()
 	defer dnsProxyMu.Unlock()
 
@@ -59,8 +67,18 @@ func StartDnsProxy(opts *DnsProxyOptions) (int, error) {
 	}
 
 	upsOpts := &upstream.Options{
-		Logger:     slog.Default(),
-		SOCKS5Addr: opts.SocksProxy,
+		Logger: slog.Default(),
+	}
+
+	// Wire socket protection via DialControl if protector is provided.
+	if protector != nil {
+		upsOpts.DialControl = func(network, address string, c syscall.RawConn) error {
+			return c.Control(func(fd uintptr) {
+				if !protector.ProtectFd(int32(fd)) {
+					slog.Warn("failed to protect DNS socket", "fd", fd)
+				}
+			})
+		}
 	}
 
 	upstreamConfig, err := proxy.ParseUpstreamsConfig(upstreams, upsOpts)
@@ -88,7 +106,6 @@ func StartDnsProxy(opts *DnsProxyOptions) (int, error) {
 		CacheMinTTL:    uint32(opts.CacheMinTTL),
 		CacheMaxTTL:    uint32(opts.CacheMaxTTL),
 		MaxGoroutines:  uint(opts.MaxGoroutines),
-		Socks5:         opts.SocksProxy,
 		RequestHandler: handler,
 	}
 
@@ -104,7 +121,6 @@ func StartDnsProxy(opts *DnsProxyOptions) (int, error) {
 		return 0, fmt.Errorf("starting dnsproxy: %w", err)
 	}
 
-	// Extract actual port before storing instance (clean up on failure)
 	addr := p.Addr(proxy.ProtoUDP)
 	if addr == nil {
 		cancel()
