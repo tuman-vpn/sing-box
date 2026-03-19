@@ -145,4 +145,4 @@ require (
 	lukechampine.com/blake3 v1.3.0 // indirect
 )
 
-replace github.com/AdguardTeam/dnsproxy => github.com/tuman-vpn/dnsproxy v0.81.0-tuman.1
+replace github.com/AdguardTeam/dnsproxy => github.com/tuman-vpn/dnsproxy-lite v0.81.0-tuman.2

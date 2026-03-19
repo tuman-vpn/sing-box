@@ -233,8 +233,8 @@ github.com/tailscale/web-client-prebuilt v0.0.0-20250124233751-d4cd19a26976 h1:U
 github.com/tailscale/web-client-prebuilt v0.0.0-20250124233751-d4cd19a26976/go.mod h1:agQPE6y6ldqCOui2gkIh7ZMztTkIQKH049tv8siLuNQ=
 github.com/tc-hib/winres v0.2.1 h1:YDE0FiP0VmtRaDn7+aaChp1KiF4owBiJa5l964l5ujA=
 github.com/tc-hib/winres v0.2.1/go.mod h1:C/JaNhH3KBvhNKVbvdlDWkbMDO9H4fKKDaN7/07SSuk=
-github.com/tuman-vpn/dnsproxy v0.81.0-tuman.1 h1:0zqyGw+CidrhQh3PM/B7DwP7SM/u7Bbj7m50a8CZznY=
-github.com/tuman-vpn/dnsproxy v0.81.0-tuman.1/go.mod h1:BG+gXjtC1yDCl5Nd30M5Q3+0T6im26rNQk4VHat0Fyc=
+github.com/tuman-vpn/dnsproxy-lite v0.81.0-tuman.2 h1:1bq32WrdV40J+bNxtnfMjeLp/6RZXtbtRvvGeU8129Q=
+github.com/tuman-vpn/dnsproxy-lite v0.81.0-tuman.2/go.mod h1:gwr+7Dc0e7QddQLC9JLGjL5NSKcqw0ESsNMRI5Q67Ps=
 github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701 h1:pyC9PaHYZFgEKFdlp3G8RaCKgVpHZnecvArXvPXcFkM=
 github.com/u-root/uio v0.0.0-20240224005618-d2acac8f3701/go.mod h1:P3a5rG4X7tI17Nn3aOIAYr5HbIMukwXG0urG0WuL8OA=
 github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae/go.mod h1:DD4vA1DwXk04H54A1oHXtwZmA0grkVMdPxx/VGLCah0=
