@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/AdguardTeam/dnsproxy/proxy"
 	"github.com/AdguardTeam/dnsproxy/upstream"
@@ -37,9 +38,10 @@ type DnsProxyOptions struct {
 }
 
 var (
-	dnsProxyMu       sync.Mutex
+	dnsProxyMu        sync.Mutex
 	dnsProxyInstance  *proxy.Proxy
 	dnsProxyCancel    context.CancelFunc
+	dnsProxyProtector SocketProtector
 )
 
 // StartDnsProxy creates and starts a dnsproxy instance with socket protection.
@@ -74,8 +76,11 @@ func StartDnsProxy(opts *DnsProxyOptions, protector SocketProtector) (int, error
 	if protector != nil {
 		upsOpts.DialControl = func(network, address string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
-				if !protector.ProtectFd(int32(fd)) {
-					slog.Warn("failed to protect DNS socket", "fd", fd)
+				ok := protector.ProtectFd(int32(fd))
+				if !ok {
+					slog.Warn("failed to protect DNS socket", "fd", fd, "network", network, "address", address)
+				} else {
+					slog.Debug("protected DNS socket", "fd", fd, "network", network, "address", address)
 				}
 			})
 		}
@@ -137,6 +142,7 @@ func StartDnsProxy(opts *DnsProxyOptions, protector SocketProtector) (int, error
 
 	dnsProxyInstance = p
 	dnsProxyCancel = cancel
+	dnsProxyProtector = protector
 
 	return udpAddr.Port, nil
 }
@@ -157,6 +163,7 @@ func StopDnsProxy() error {
 
 	err := dnsProxyInstance.Shutdown(context.Background())
 	dnsProxyInstance = nil
+	dnsProxyProtector = nil
 
 	return err
 }
@@ -167,6 +174,91 @@ func DnsProxyRunning() bool {
 	defer dnsProxyMu.Unlock()
 
 	return dnsProxyInstance != nil
+}
+
+// DnsProxyHealthCheck verifies dnsproxy is running and can resolve DNS.
+// Sends a query for yandex.ru to dnsproxy's own listening port from within
+// the Go runtime, bypassing any vendor TUN routing quirks that affect Java sockets.
+//
+// The health check socket is protected via VpnService.protect() using the same
+// protector passed to StartDnsProxy. On stock Android, localhost traffic uses the
+// loopback interface and protection is a no-op. On some OEM devices (e.g., Honor),
+// the TUN can capture localhost UDP — protection ensures the socket bypasses it.
+//
+// Note: after the first successful check, dnsproxy's cache (TTL 60-3600s) may serve
+// the response locally. This means subsequent checks verify "dnsproxy is listening
+// and responding" rather than "upstream Yandex DNS is reachable". The first check
+// in a session always hits upstream.
+//
+// Thread safety: acquires dnsProxyMu to read dnsProxyInstance and dnsProxyProtector.
+// If StopDnsProxy() is called concurrently, the query may fail — this is expected
+// and returns false.
+func DnsProxyHealthCheck(timeoutMs int) bool {
+	dnsProxyMu.Lock()
+	if dnsProxyInstance == nil {
+		dnsProxyMu.Unlock()
+		return false
+	}
+	addr := dnsProxyInstance.Addr(proxy.ProtoUDP)
+	protector := dnsProxyProtector
+	dnsProxyMu.Unlock()
+
+	if addr == nil {
+		return false
+	}
+	udpAddr, ok := addr.(*net.UDPAddr)
+	if !ok {
+		return false
+	}
+
+	// Build DNS query for yandex.ru A record using miekg/dns
+	msg := new(dns.Msg)
+	msg.SetQuestion(dns.Fqdn("yandex.ru"), dns.TypeA)
+	msg.Id = dns.Id()
+	msg.RecursionDesired = true
+	queryBytes, err := msg.Pack()
+	if err != nil {
+		slog.Warn("health check: failed to pack DNS query", "error", err)
+		return false
+	}
+
+	// Send to dnsproxy on localhost — socket protected to bypass TUN on OEM devices
+	timeout := time.Duration(timeoutMs) * time.Millisecond
+	dialer := net.Dialer{Timeout: timeout}
+	if protector != nil {
+		dialer.Control = func(network, address string, c syscall.RawConn) error {
+			return c.Control(func(fd uintptr) {
+				ok := protector.ProtectFd(int32(fd))
+				if !ok {
+					slog.Warn("health check: failed to protect socket", "fd", fd)
+				}
+			})
+		}
+	}
+
+	conn, err := dialer.Dial("udp",
+		net.JoinHostPort("127.0.0.1", fmt.Sprintf("%d", udpAddr.Port)))
+	if err != nil {
+		slog.Warn("health check: failed to dial dnsproxy", "port", udpAddr.Port, "error", err)
+		return false
+	}
+	defer conn.Close()
+
+	conn.SetDeadline(time.Now().Add(timeout))
+
+	if _, err = conn.Write(queryBytes); err != nil {
+		slog.Warn("health check: failed to send query", "error", err)
+		return false
+	}
+
+	buf := make([]byte, 512)
+	n, err := conn.Read(buf)
+	if err != nil {
+		slog.Warn("health check: failed to read response", "error", err)
+		return false
+	}
+
+	return n > 12
 }
 
 // ipv6BlockHandler blocks AAAA queries by returning NODATA,
