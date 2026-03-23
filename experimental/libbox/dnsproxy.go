@@ -44,6 +44,13 @@ var (
 	dnsProxyProtector SocketProtector
 )
 
+var (
+	// Stored for watchdog restart
+	dnsProxyOpts      *DnsProxyOptions
+	dnsProxyWatchdog  context.CancelFunc
+	dnsProxyUnhealthy bool // true when watchdog gave up (3 restarts failed)
+)
+
 // StartDnsProxy creates and starts a dnsproxy instance with socket protection.
 // The protector is called on every DNS socket to bypass the VPN TUN interface.
 // Returns the actual listening port.
@@ -55,6 +62,46 @@ func StartDnsProxy(opts *DnsProxyOptions, protector SocketProtector) (int, error
 		return 0, fmt.Errorf("dnsproxy is already running")
 	}
 
+	port, err := startProxyLocked(opts, protector)
+	if err != nil {
+		return 0, err
+	}
+
+	// Managed here, not in startProxyLocked (watchdog restarts must not reset these)
+	dnsProxyOpts = opts
+	dnsProxyUnhealthy = false
+
+	slog.Info("dnsproxy started", "port", port)
+
+	// Start runtime watchdog for auto-recovery
+	watchCtx, watchCancel := context.WithCancel(context.Background())
+	dnsProxyWatchdog = watchCancel
+	startWatchdog(watchCtx, 5*time.Second, 1500, 2, 3)
+
+	return port, nil
+}
+
+// StopDnsProxy shuts down the running dnsproxy instance.
+func StopDnsProxy() error {
+	dnsProxyMu.Lock()
+	defer dnsProxyMu.Unlock()
+
+	// Stop watchdog first
+	if dnsProxyWatchdog != nil {
+		dnsProxyWatchdog()
+		dnsProxyWatchdog = nil
+	}
+
+	stopProxyLocked()
+	dnsProxyProtector = nil
+	dnsProxyOpts = nil
+	dnsProxyUnhealthy = false
+
+	return nil
+}
+
+// startProxyLocked starts dnsproxy with the given config. Caller must hold dnsProxyMu.
+func startProxyLocked(opts *DnsProxyOptions, protector SocketProtector) (int, error) {
 	lines := strings.Split(strings.TrimSpace(opts.Upstreams), "\n")
 	var upstreams []string
 	for _, line := range lines {
@@ -69,10 +116,10 @@ func StartDnsProxy(opts *DnsProxyOptions, protector SocketProtector) (int, error
 	}
 
 	upsOpts := &upstream.Options{
-		Logger: slog.Default(),
+		Logger:  slog.Default(),
+		Timeout: 5 * time.Second,
 	}
 
-	// Wire socket protection via DialControl if protector is provided.
 	if protector != nil {
 		upsOpts.DialControl = func(network, address string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
@@ -143,29 +190,108 @@ func StartDnsProxy(opts *DnsProxyOptions, protector SocketProtector) (int, error
 	dnsProxyInstance = p
 	dnsProxyCancel = cancel
 	dnsProxyProtector = protector
+	// Note: dnsProxyOpts and dnsProxyUnhealthy are managed by callers,
+	// not here. StartDnsProxy sets them; watchdog leaves them alone.
 
 	return udpAddr.Port, nil
 }
 
-// StopDnsProxy shuts down the running dnsproxy instance.
-func StopDnsProxy() error {
-	dnsProxyMu.Lock()
-	defer dnsProxyMu.Unlock()
-
+// stopProxyLocked stops dnsproxy. Caller must hold dnsProxyMu.
+// Does NOT clear dnsProxyOpts/dnsProxyProtector (needed for restart).
+func stopProxyLocked() {
 	if dnsProxyInstance == nil {
-		return nil
+		return
 	}
-
 	if dnsProxyCancel != nil {
 		dnsProxyCancel()
 		dnsProxyCancel = nil
 	}
-
-	err := dnsProxyInstance.Shutdown(context.Background())
+	_ = dnsProxyInstance.Shutdown(context.Background())
 	dnsProxyInstance = nil
-	dnsProxyProtector = nil
+}
 
-	return err
+// startWatchdog launches a goroutine that periodically health-checks dnsproxy
+// and restarts it on persistent failure. Stops when ctx is cancelled (via StopDnsProxy).
+//
+// Parameters:
+//   - checkInterval: time between health checks (5s recommended)
+//   - checkTimeout: health check UDP timeout in ms (1500 recommended — cache-warm)
+//   - maxConsecFails: consecutive failures before restart (2)
+//   - maxRestarts: give up and set unhealthy flag after this many failed restarts (3)
+func startWatchdog(ctx context.Context, checkInterval time.Duration, checkTimeout int, maxConsecFails int, maxRestarts int) {
+	go func() {
+		consecFails := 0
+		failedRestarts := 0
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(checkInterval):
+			}
+
+			if DnsProxyHealthCheck(checkTimeout) {
+				consecFails = 0
+				continue
+			}
+
+			consecFails++
+			slog.Warn("dnsproxy watchdog: health check failed",
+				"consecutive_failures", consecFails,
+				"failed_restarts_so_far", failedRestarts)
+
+			if consecFails < maxConsecFails {
+				continue
+			}
+
+			// Persistent failure — restart
+			if failedRestarts >= maxRestarts {
+				slog.Error("dnsproxy watchdog: max failed restarts reached, marking unhealthy",
+					"max_restarts", maxRestarts)
+				dnsProxyMu.Lock()
+				dnsProxyUnhealthy = true
+				dnsProxyMu.Unlock()
+				return
+			}
+
+			slog.Warn("dnsproxy watchdog: restarting proxy", "attempt", failedRestarts+1)
+			dnsProxyMu.Lock()
+			// Guard: StopDnsProxy may have run between health check and here.
+			// Check context AND module state to avoid restarting a stopped proxy.
+			if ctx.Err() != nil {
+				dnsProxyMu.Unlock()
+				return
+			}
+			opts := dnsProxyOpts
+			protector := dnsProxyProtector
+			if opts == nil || dnsProxyInstance == nil {
+				dnsProxyMu.Unlock()
+				return // proxy was stopped externally
+			}
+			stopProxyLocked()
+			_, err := startProxyLocked(opts, protector)
+			dnsProxyMu.Unlock()
+
+			if err != nil {
+				slog.Error("dnsproxy watchdog: restart failed", "error", err)
+				failedRestarts++
+			} else {
+				slog.Info("dnsproxy watchdog: restart succeeded")
+				consecFails = 0
+			}
+		}
+	}()
+}
+
+// DnsProxyHealthy returns true if dnsproxy is running AND the watchdog
+// has not given up. Returns false if the watchdog exhausted its restart
+// attempts, meaning dnsproxy is in a persistently broken state.
+// Kotlin polls this via componentHealthChecker every 30s.
+func DnsProxyHealthy() bool {
+	dnsProxyMu.Lock()
+	defer dnsProxyMu.Unlock()
+
+	return dnsProxyInstance != nil && !dnsProxyUnhealthy
 }
 
 // DnsProxyRunning returns whether dnsproxy is currently running.
