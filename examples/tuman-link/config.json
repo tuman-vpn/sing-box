@@ -1,0 +1,43 @@
+{
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "udp",
+        "tag": "dns-tl1",
+        "detour": "tl1",
+        "server": "1.1.1.1"
+      }
+    ],
+    "final": "dns-tl1"
+  },
+  "endpoints": [
+    {
+      "type": "tuman-link",
+      "tag": "tl1",
+      "descriptor": {
+        "file": "/path/to/tl1/gateway.tl1"
+      },
+      "credentials_dir": "/path/to/tl1/device",
+      "setup_order": [
+        "quic"
+      ]
+    }
+  ],
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 1080
+    }
+  ],
+  "route": {
+    "final": "tl1",
+    "auto_detect_interface": true,
+    "default_domain_resolver": "dns-tl1"
+  }
+}

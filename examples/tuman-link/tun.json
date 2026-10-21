@@ -1,0 +1,75 @@
+{
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "type": "udp",
+        "tag": "dns-tl1",
+        "detour": "tl1",
+        "server": "1.1.1.1"
+      },
+      {
+        "type": "local",
+        "tag": "dns-local"
+      }
+    ],
+    "final": "dns-tl1"
+  },
+  "endpoints": [
+    {
+      "type": "tuman-link",
+      "tag": "tl1",
+      "descriptor": {
+        "file": "/path/to/tl1/gateway.tl1"
+      },
+      "credentials_dir": "/path/to/tl1/device",
+      "setup_order": [
+        "quic",
+        "dns"
+      ],
+      "resolver": "192.0.2.53:53",
+      "direct_timeout": "3s",
+      "mtu": 1280
+    }
+  ],
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "mtu": 1280,
+      "address": [
+        "172.19.0.1/30",
+        "fdfe:dcba:9876::1/126"
+      ],
+      "auto_route": true,
+      "strict_route": true
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "action": "sniff"
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "direct"
+      }
+    ],
+    "final": "tl1",
+    "auto_detect_interface": true,
+    "default_domain_resolver": "dns-local"
+  }
+}
