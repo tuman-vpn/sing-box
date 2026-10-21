@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/sagernet/sing/service"
 	"github.com/tuman-vpn/link/client"
 	tlcrypto "github.com/tuman-vpn/link/crypto"
+	"github.com/tuman-vpn/link/descriptor"
 	"github.com/tuman-vpn/link/host/packetdev"
 )
 
@@ -64,6 +66,27 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
 	if options.Descriptor == "" || options.CredentialsPath == "" {
 		return nil, fmt.Errorf("tuman-link requires descriptor and credentials_dir")
 	}
+	var seen [2]bool
+	for _, name := range options.SetupOrder {
+		path := 0
+		switch name {
+		case "direct", "rtp", "udp", "quic":
+		case "dns":
+			path = 1
+		default:
+			return nil, fmt.Errorf("tuman-link setup_order: unknown path %q", name)
+		}
+		if seen[path] {
+			return nil, fmt.Errorf("tuman-link setup_order: duplicate direct or dns path %q", name)
+		}
+		seen[path] = true
+	}
+	if _, err := normalizeCoverSNIs(options.CoverSNI); err != nil {
+		return nil, err
+	}
+	if options.CoverProbation < 0 || time.Duration(options.CoverProbation)%time.Second != 0 {
+		return nil, fmt.Errorf("tuman-link cover_probation must be a non-negative whole number of seconds")
+	}
 	if options.MTU != 0 && (options.MTU < 1280 || options.MTU > 1400) {
 		return nil, fmt.Errorf("tuman-link MTU must be 1280–1400")
 	}
@@ -88,6 +111,25 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &Endpoint{cancel: cancel, Adapter: endpoint.NewAdapterWithDialerOptions(C.TypeTumanLink, tag, []string{N.NetworkTCP, N.NetworkUDP}, options.DialerOptions), ctx: ctx, logger: logger, options: options, outer: outer, dns: service.FromContext[adapter.DNSRouter](ctx), network: service.FromContext[adapter.NetworkManager](ctx), changes: make(chan struct{}, 1)}, nil
+}
+
+func normalizeCoverSNIs(pool []string) ([]string, error) {
+	var names []string
+	seen := make(map[string]bool)
+	for _, entry := range pool {
+		for _, name := range strings.Split(entry, ",") {
+			if name == "" || (descriptor.Descriptor{CoverSNI: name}).Validate() != nil {
+				return nil, fmt.Errorf("tuman-link cover_sni: invalid DNS hostname %q", name)
+			}
+			// Validate admits lowercase names only, so exact matching is enough.
+			if seen[name] {
+				return nil, fmt.Errorf("tuman-link cover_sni: duplicate DNS hostname %q", name)
+			}
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	return names, nil
 }
 
 func (e *Endpoint) Start(stage adapter.StartStage) error {
@@ -370,6 +412,10 @@ func (e *Endpoint) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	return conn, nil
 }
 func (e *Endpoint) clientConfig() (client.Config, func(), error) {
+	covers, err := normalizeCoverSNIs(e.options.CoverSNI)
+	if err != nil {
+		return client.Config{}, nil, err
+	}
 	cfg, erase, err := loadClientConfig(e.options)
 	if err != nil {
 		return cfg, nil, err
@@ -377,6 +423,9 @@ func (e *Endpoint) clientConfig() (client.Config, func(), error) {
 	cfg.Clock = e.clock
 	cfg.BindIface = e.options.BindInterface
 	cfg.SetupOrder = append([]string(nil), e.options.SetupOrder...)
+	cfg.CoverSNIs = covers
+	cfg.NoCoverProbe = e.options.NoCoverProbe
+	cfg.CoverProbationS = int(time.Duration(e.options.CoverProbation) / time.Second)
 	cfg.SetupPolicy.DirectTimeout = time.Duration(e.options.DirectTimeout)
 	if e.options.Resolver != "" {
 		cfg.Resolver = netip.MustParseAddrPort(e.options.Resolver)

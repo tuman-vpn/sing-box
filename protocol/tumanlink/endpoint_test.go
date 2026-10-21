@@ -76,7 +76,7 @@ func TestOptionsJSONRoundTrip(t *testing.T) {
 		if err = json.Unmarshal(encoded, &again); err != nil {
 			t.Fatal(err)
 		}
-		if again.Descriptor != want || again.CredentialsPath != opts.CredentialsPath {
+		if again.Descriptor != want || again.DescriptorFile != strings.Contains(desc, "file") || again.CredentialsPath != opts.CredentialsPath {
 			t.Fatal(string(encoded))
 		}
 	}
@@ -271,7 +271,12 @@ func newFixture(t *testing.T, carrier string, stale bool, virtual bool, hooks ..
 			t.Fatal(err)
 		}
 	}
-	ep, err := NewEndpoint(ctx, nil, factory.NewLogger("tl1"), "tl1", option.TumanLinkEndpointOptions{Descriptor: input, CredentialsPath: dir, SetupOrder: []string{carrier}, Workers: 2})
+	opts := option.TumanLinkEndpointOptions{Descriptor: input, DescriptorFile: carrier == "rtp", CredentialsPath: dir, SetupOrder: []string{carrier}, Workers: 2}
+	if carrier == "quic" {
+		opts.CoverSNI = []string{"cover-a.example", "github.com"}
+		opts.CoverProbation = badoption.Duration(30 * time.Second)
+	}
+	ep, err := NewEndpoint(ctx, nil, factory.NewLogger("tl1"), "tl1", opts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +313,7 @@ func awaitLog(t *testing.T, b *logBuffer, want string) {
 func TestEndpointLoopback(t *testing.T) { testEndpointLoopback(t, false) }
 func TestEndpointInMemory(t *testing.T) { testEndpointLoopback(t, true) }
 func testEndpointLoopback(t *testing.T, virtual bool) {
-	for _, carrier := range []string{"udp", "rtp"} {
+	for _, carrier := range []string{"udp", "rtp", "quic"} {
 		t.Run(carrier, func(t *testing.T) {
 			f := newFixture(t, carrier, false, virtual)
 			awaitLog(t, f.logs, "Lease")

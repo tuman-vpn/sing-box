@@ -243,16 +243,21 @@ func TestResolverValidation(t *testing.T) {
 	}
 }
 
-func TestDescriptorPathFallback(t *testing.T) {
+// Catches base64 that looks like a path being read from disk, and a missing
+// descriptor file being reported as a base64 error.
+func TestDescriptorFormIsExplicit(t *testing.T) {
 	opts, _, _ := credentialFixture(t)
-	// A slash is valid base64. Missing absolute-looking inputs must reach the
-	// decoder/parser, not fail with an OS path error.
-	for _, input := range []string{"/w==", "./missing-descriptor"} {
-		opts.Descriptor = input
+	for _, tc := range []struct {
+		input   string
+		isFile  bool
+		corrupt bool
+	}{{"/w==", false, false}, {"./missing-descriptor", false, true}, {"/etc/hosts", false, true}, {"./missing-descriptor", true, false}} {
+		opts.Descriptor, opts.DescriptorFile = tc.input, tc.isFile
 		_, _, err := loadClientConfig(opts)
 		var pe *os.PathError
-		if err == nil || errors.As(err, &pe) {
-			t.Fatalf("missing path did not fall back to base64: %v", err)
+		var ce base64.CorruptInputError
+		if err == nil || errors.As(err, &pe) != tc.isFile || errors.As(err, &ce) != tc.corrupt {
+			t.Fatalf("%q file=%v: %v", tc.input, tc.isFile, err)
 		}
 	}
 }

@@ -97,7 +97,7 @@ func loadClientConfig(options option.TumanLinkEndpointOptions) (cfg client.Confi
 		}
 	}
 	var signedBytes []byte
-	if option.TumanLinkDescriptorIsFile(options.Descriptor) {
+	if options.DescriptorFile {
 		signedBytes, err = os.ReadFile(options.Descriptor)
 	} else {
 		signedBytes, err = base64.StdEncoding.DecodeString(options.Descriptor)
