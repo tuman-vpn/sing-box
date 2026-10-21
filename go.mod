@@ -66,6 +66,7 @@ require (
 	github.com/shtorm-7/workerpool v0.5.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
+	github.com/tuman-vpn/link v0.1.0
 	github.com/vishvananda/netns v0.0.5
 	github.com/xtaci/kcp-go/v5 v5.6.72
 	github.com/yosida95/uritemplate/v3 v3.0.2
@@ -93,6 +94,7 @@ require (
 	github.com/docker/go-connections v0.7.0 // indirect
 	github.com/dunglas/httpsfv v1.1.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/flynn/noise v1.1.0 // indirect
 	github.com/klauspost/reedsolomon v1.12.0 // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/moby/term v0.5.2 // indirect
@@ -118,10 +120,12 @@ require (
 	github.com/tylertreat/BoomFilters v0.0.0-20251117164519-53813c36cc1b // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
 	github.com/zeebo/assert v1.3.0 // indirect
+	go.etcd.io/bbolt v1.5.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.44.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
+	golang.zx2c4.com/wireguard v0.0.0-20261006164505-2631ce99a06f // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	modernc.org/libc v1.72.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

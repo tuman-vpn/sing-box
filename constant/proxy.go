@@ -96,6 +96,8 @@ func ProxyDisplayName(proxyType string) string {
 		return "Naive"
 	case TypeWireGuard:
 		return "WireGuard"
+	case TypeTumanLink:
+		return "Tuman Link"
 	case TypeWARP:
 		return "WARP"
 	case TypeMASQUE:

@@ -149,6 +149,7 @@ func EndpointRegistry() *endpoint.Registry {
 	vpn.RegisterServerEndpoint(registry)
 	vpn.RegisterClientEndpoint(registry)
 
+	registerTumanLinkEndpoint(registry)
 	registerWireGuardEndpoint(registry)
 	registerTailscaleEndpoint(registry)
 
