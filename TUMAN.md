@@ -30,8 +30,9 @@ so docs never conflict on a rebase.
 The protocol itself lives in [`github.com/tuman-vpn/link`](https://github.com/tuman-vpn/link)
 (`link/docs/singbox.md` there is the host contract this endpoint implements).
 
-The optional `cover_profile` selects `chrome` (default), `chrome-1pkt` or
-`apple` for the QUIC cover handshake. It requires `quic` in `setup_order` and
+The optional `cover_profile` selects `chrome` (default, Chrome 155), `chrome-1pkt`,
+`apple` (Safari 26 / iOS apps) or `ttnet` (TikTok's draft-29 stack; the gateway must
+enable draft-29 and the cover name must be a TikTok name) for the QUIC cover handshake. It requires `quic` in `setup_order` and
 is validated by `sing-box check`. Both examples use `apple` with the
 h3-capable allowlisted cover name `www.google.com`.
 
