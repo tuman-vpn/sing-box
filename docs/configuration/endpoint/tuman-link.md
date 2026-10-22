@@ -135,7 +135,7 @@ profile without `quic` fail `sing-box check`.
 
 | Field | Type | Default | Accepted values |
 | --- | --- | --- | --- |
-| `cover_profile` | string | `chrome` | `chrome` (Chrome 155), `chrome-1pkt`, `apple` (Safari 26 / iOS apps), `ttnet` (TikTok TTNet, QUIC draft-29; gateway must enable draft-29; use a TikTok cover name such as `api16-normal-c-useast1a.tiktokv.com`) |
+| `cover_profile` | string | `chrome` | `chrome` (Chrome 155), `chrome-1pkt`, `apple` (Safari 26 / iOS apps) |
 
 The link client may switch the active profile during automatic fallback.
 
