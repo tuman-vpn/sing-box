@@ -30,6 +30,8 @@
         "quic",
         "dns"
       ],
+      "cover_sni": "www.google.com",
+      "cover_profile": "apple",
       "resolver": "192.0.2.53:53",
       "direct_timeout": "3s",
       "mtu": 1280
@@ -73,3 +75,4 @@
     "default_domain_resolver": "dns-local"
   }
 }
+

@@ -11,7 +11,7 @@ upstream. The Tuman iOS and desktop apps pin this repository as their
 | Path | Purpose |
 | --- | --- |
 | `constant/tumanlink.go` | `TypeTumanLink = "tuman-link"` |
-| `option/tumanlink.go` | `TumanLinkEndpointOptions` (descriptor union, credentials, setup order, cover pool) |
+| `option/tumanlink.go` | `TumanLinkEndpointOptions` (descriptor union, credentials, setup order, cover pool and profile) |
 | `protocol/tumanlink/` | Endpoint: credential loading, descriptor verification, link lifecycle and reconnect, `SetAuthFailureHandler` hook |
 | `transport/tumanlink/` | gVisor netstack on top of `link/host/packetdev` |
 | `include/tumanlink*.go` | Registration (`with_gvisor`) and a stub that asks for the tag |
@@ -29,6 +29,11 @@ so docs never conflict on a rebase.
 
 The protocol itself lives in [`github.com/tuman-vpn/link`](https://github.com/tuman-vpn/link)
 (`link/docs/singbox.md` there is the host contract this endpoint implements).
+
+The optional `cover_profile` selects `chrome` (default), `chrome-1pkt` or
+`apple` for the QUIC cover handshake. It requires `quic` in `setup_order` and
+is validated by `sing-box check`. Both examples use `apple` with the
+h3-capable allowlisted cover name `www.google.com`.
 
 ## Building
 
@@ -141,7 +146,7 @@ submodules to the new tag and re-check their patch series with
 ## Link dependency
 
 `go.mod` requires a tagged `github.com/tuman-vpn/link` release (currently
-`v0.1.0`). To pick up link changes, tag a new link release, then
+`v0.3.0`). To pick up link changes, tag a new link release, then
 `go get github.com/tuman-vpn/link@vX.Y.Z && go mod tidy` (with `GOPRIVATE`) and
 release a new `-tuman.N` tag. While link is private, every builder (developer
 machines and CI) needs `GOPRIVATE=github.com/tuman-vpn` and read access to the

@@ -21,6 +21,7 @@ type TumanLinkEndpointOptions struct {
 	CredentialsPath string                     `json:"credentials_dir"`
 	SetupOrder      []string                   `json:"setup_order,omitempty"`
 	CoverSNI        badoption.Listable[string] `json:"cover_sni,omitempty"`
+	CoverProfile    string                     `json:"cover_profile,omitempty"`
 	NoCoverProbe    bool                       `json:"no_cover_probe,omitempty"`
 	CoverProbation  badoption.Duration         `json:"cover_probation,omitempty"`
 	Resolver        string                     `json:"resolver,omitempty"`

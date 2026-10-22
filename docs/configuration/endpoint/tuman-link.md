@@ -27,6 +27,7 @@ is used as an outbound: route traffic to its tag.
   "setup_order": ["quic"],
   "direct_timeout": "",
   "cover_sni": [],
+  "cover_profile": "chrome",
   "no_cover_probe": false,
   "cover_probation": "",
   "resolver": "",
@@ -126,6 +127,18 @@ records, or data still flows after 15 s. A name whose flow is cut during
 probation is marked failed and the next name is tried. This setting is not
 authenticated and changes no keys or descriptor bytes.
 
+#### cover_profile
+
+Optional QUIC cover profile, passed to `client.Config.CoverProfile`. It applies
+only to carrier 4 and requires `quic` in `setup_order`; invalid values or a
+profile without `quic` fail `sing-box check`.
+
+| Field | Type | Default | Accepted values |
+| --- | --- | --- | --- |
+| `cover_profile` | string | `chrome` | `chrome`, `chrome-1pkt`, `apple` |
+
+The link client may switch the active profile during automatic fallback.
+
 #### no_cover_probe
 
 Diagnostic only: disable the probation PINGs on the `quic` carrier. Covers are
@@ -185,7 +198,8 @@ cause and passes it to the handler installed with
 ### Example
 
 A local proxy that sends everything, including DNS, through TL1 over the QUIC
-carrier, using the descriptor's cover name (`examples/tuman-link/config.json`;
+carrier, using the Apple cover profile and `www.google.com`, an h3-capable
+allowlisted cover name (`examples/tuman-link/config.json`;
 a whole-device `tun` variant is in `examples/tuman-link/tun.json`). Add
 `"cover_sni": ["name-a.example", "name-b.example"]` to rotate through a pool
 of your own cover names.
@@ -217,7 +231,9 @@ of your own cover names.
       "credentials_dir": "/path/to/tl1/device",
       "setup_order": [
         "quic"
-      ]
+      ],
+      "cover_sni": "www.google.com",
+      "cover_profile": "apple"
     }
   ],
   "inbounds": [

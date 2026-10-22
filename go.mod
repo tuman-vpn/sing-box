@@ -66,7 +66,7 @@ require (
 	github.com/shtorm-7/workerpool v0.5.0
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
-	github.com/tuman-vpn/link v0.2.0
+	github.com/tuman-vpn/link v0.3.0
 	github.com/vishvananda/netns v0.0.5
 	github.com/xtaci/kcp-go/v5 v5.6.72
 	github.com/yosida95/uritemplate/v3 v3.0.2

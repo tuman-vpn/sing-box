@@ -19,6 +19,16 @@ func TestSetupAndCoverValidation(t *testing.T) {
 		{"defaults", ``, ""},
 		{"quic", `,"setup_order":["quic"]`, ""},
 		{"quic dns", `,"setup_order":["quic","dns"]`, ""},
+		{"chrome profile", `,"setup_order":["quic"],"cover_profile":"chrome"`, ""},
+		{"chrome one packet profile", `,"setup_order":["quic"],"cover_profile":"chrome-1pkt"`, ""},
+		{"apple profile", `,"setup_order":["quic"],"cover_profile":"apple"`, ""},
+		{"profile with dns first", `,"setup_order":["dns","quic"],"cover_profile":"apple"`, ""},
+		{"invalid profile", `,"setup_order":["quic"],"cover_profile":"firefox"`, "tuman-link cover_profile:"},
+		{"profile with default order", `,"cover_profile":"apple"`, "tuman-link cover_profile: requires quic in setup_order"},
+		{"profile with rtp", `,"setup_order":["rtp"],"cover_profile":"chrome"`, "tuman-link cover_profile: requires quic in setup_order"},
+		{"profile with udp", `,"setup_order":["udp","dns"],"cover_profile":"chrome-1pkt"`, "tuman-link cover_profile: requires quic in setup_order"},
+		{"profile with direct", `,"setup_order":["direct"],"cover_profile":"apple"`, "tuman-link cover_profile: requires quic in setup_order"},
+		{"profile with dns only", `,"setup_order":["dns"],"cover_profile":"apple"`, "tuman-link cover_profile: requires quic in setup_order"},
 		{"dns quic", `,"setup_order":["dns","quic"]`, ""},
 		{"udp dns", `,"setup_order":["udp","dns"]`, ""},
 		{"direct", `,"setup_order":["direct"]`, ""},
@@ -59,6 +69,32 @@ func TestSetupAndCoverValidation(t *testing.T) {
 				}
 			} else if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("want %s error, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+// Catches cover_profile lost between endpoint options and the link client.
+func TestClientCoverProfileConfig(t *testing.T) {
+	for _, profile := range []string{"", "chrome", "chrome-1pkt", "apple"} {
+		t.Run(profile, func(t *testing.T) {
+			opts, _, _ := credentialFixture(t)
+			raw := `{"descriptor":"` + opts.Descriptor + `","credentials_dir":"` + opts.CredentialsPath + `","setup_order":["quic"],"cover_profile":"` + profile + `"}`
+			if err := json.Unmarshal([]byte(raw), &opts); err != nil {
+				t.Fatal(err)
+			}
+			a, err := NewEndpoint(context.Background(), nil, log.NewNOPFactory().Logger(), "tl1", opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer a.Close()
+			cfg, erase, err := a.(*Endpoint).clientConfig()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer erase()
+			if cfg.CoverProfile != profile {
+				t.Fatalf("CoverProfile = %q, want %q", cfg.CoverProfile, profile)
 			}
 		})
 	}

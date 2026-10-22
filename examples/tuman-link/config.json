@@ -24,7 +24,9 @@
       "credentials_dir": "/path/to/tl1/device",
       "setup_order": [
         "quic"
-      ]
+      ],
+      "cover_sni": "www.google.com",
+      "cover_profile": "apple"
     }
   ],
   "inbounds": [
@@ -41,3 +43,4 @@
     "default_domain_resolver": "dns-tl1"
   }
 }
+

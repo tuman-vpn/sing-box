@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,7 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
+	"github.com/tuman-vpn/link/carrier/quic"
 	"github.com/tuman-vpn/link/client"
 	tlcrypto "github.com/tuman-vpn/link/crypto"
 	"github.com/tuman-vpn/link/descriptor"
@@ -83,6 +85,12 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
 	}
 	if _, err := normalizeCoverSNIs(options.CoverSNI); err != nil {
 		return nil, err
+	}
+	if _, err := quic.ParseProfile(options.CoverProfile); err != nil {
+		return nil, fmt.Errorf("tuman-link cover_profile: %w", err)
+	}
+	if options.CoverProfile != "" && !slices.Contains(options.SetupOrder, "quic") {
+		return nil, fmt.Errorf("tuman-link cover_profile: requires quic in setup_order")
 	}
 	if options.CoverProbation < 0 || time.Duration(options.CoverProbation)%time.Second != 0 {
 		return nil, fmt.Errorf("tuman-link cover_probation must be a non-negative whole number of seconds")
@@ -424,6 +432,7 @@ func (e *Endpoint) clientConfig() (client.Config, func(), error) {
 	cfg.BindIface = e.options.BindInterface
 	cfg.SetupOrder = append([]string(nil), e.options.SetupOrder...)
 	cfg.CoverSNIs = covers
+	cfg.CoverProfile = e.options.CoverProfile
 	cfg.NoCoverProbe = e.options.NoCoverProbe
 	cfg.CoverProbationS = int(time.Duration(e.options.CoverProbation) / time.Second)
 	cfg.SetupPolicy.DirectTimeout = time.Duration(e.options.DirectTimeout)

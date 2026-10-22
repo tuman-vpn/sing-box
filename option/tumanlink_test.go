@@ -43,10 +43,50 @@ func TestTumanLinkCoverJSONRoundTrip(t *testing.T) {
 
 // Catches misspelled options being ignored instead of failing check.
 func TestTumanLinkUnknownField(t *testing.T) {
-	var opts TumanLinkEndpointOptions
-	err := json.Unmarshal([]byte(`{"descriptor":"YWJj","credentials_dir":"/private/tl1","cover_snis":["a.example"]}`), &opts)
-	if err == nil || !strings.Contains(err.Error(), "cover_snis") {
-		t.Fatalf("accepted unknown field: %v", err)
+	for _, field := range []string{"cover_snis", "cover_profiles"} {
+		var opts TumanLinkEndpointOptions
+		err := json.Unmarshal([]byte(`{"descriptor":"YWJj","credentials_dir":"/private/tl1","`+field+`":"apple"}`), &opts)
+		if err == nil || !strings.Contains(err.Error(), field) {
+			t.Fatalf("accepted unknown field %s: %v", field, err)
+		}
+	}
+}
+
+// Catches cover_profile rejected, lost by the descriptor union, or emitted when omitted.
+func TestTumanLinkCoverProfileJSONRoundTrip(t *testing.T) {
+	for _, profile := range []string{"", "chrome", "chrome-1pkt", "apple"} {
+		t.Run(profile, func(t *testing.T) {
+			raw := `{"descriptor":{"base64":"YWJj"},"credentials_dir":"/private/tl1","setup_order":["quic"]`
+			if profile != "" {
+				raw += `,"cover_profile":"` + profile + `"`
+			}
+			raw += `}`
+			var opts TumanLinkEndpointOptions
+			if err := json.Unmarshal([]byte(raw), &opts); err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := json.Marshal(opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var want, got map[string]any
+			if err = json.Unmarshal([]byte(raw), &want); err != nil {
+				t.Fatal(err)
+			}
+			if err = json.Unmarshal(encoded, &got); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("cover profile changed: %s", encoded)
+			}
+			var again TumanLinkEndpointOptions
+			if err = json.Unmarshal(encoded, &again); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(again, opts) {
+				t.Fatalf("round trip changed options: %+v", again)
+			}
+		})
 	}
 }
 
